@@ -46,7 +46,7 @@
       try {
         const { ScramjetController } = $scramjetLoadController();
         scramjet = new ScramjetController({
-          prefix: "/scramjet/",
+          prefix: new URL("./scramjet/", location.href).pathname,
           files: {
             wasm: `${ENGINE_CDN}/scramjet.wasm`,
             all: `${ENGINE_CDN}/scramjet-all.js`,
