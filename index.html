@@ -59,6 +59,11 @@
         await navigator.serviceWorker.register("./sw.js", { scope: "./" });
         await navigator.serviceWorker.ready;
 
+        if (!navigator.serviceWorker.controller) {
+          location.reload();
+          return;
+        }
+
         const connection = new BareMux.BareMuxConnection("./bare-mux-worker.js");
         await connection.setTransport(TRANSPORT_CDN, [{ wisp: WISP_URL }]);
 
