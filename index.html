@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Scramjet Proxy</title>
+  <script src="https://cdn.jsdelivr.net/npm/@mercuryworkshop/bare-mux@2.1.9/dist/index.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/hahahah67-pixel/scramjet-static@main/scramjet-engine/scramjet-all.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, sans-serif; }
+    body { background: #0f1115; color: #fff; display: flex; flex-direction: column; height: 100vh; }
+    header { display: flex; gap: 8px; padding: 10px; background: #181b22; border-bottom: 1px solid #2a2f3a; }
+    button { background: #262b36; color: #fff; border: 1px solid #363d4d; padding: 8px 12px; border-radius: 6px; cursor: pointer; }
+    button:hover { background: #323846; }
+    input { flex: 1; background: #0f1115; color: #fff; border: 1px solid #363d4d; padding: 8px 12px; border-radius: 6px; outline: none; }
+    input:focus { border-color: #5b8def; }
+    #status { font-size: 12px; color: #9aa4b2; align-self: center; padding: 0 6px; white-space: nowrap; }
+    iframe { flex: 1; width: 100%; border: none; background: #fff; }
+  </style>
+</head>
+<body>
+  <header>
+    <button id="back-btn" title="Back">←</button>
+    <button id="fwd-btn" title="Forward">→</button>
+    <button id="reload-btn" title="Reload">↻</button>
+    <form id="proxy-form" style="display: flex; flex: 1; gap: 8px;">
+      <input id="url-input" type="text" placeholder="Enter URL (e.g. https://www.youtube.com) or search..." autocomplete="off" />
+      <button type="submit">Go</button>
+    </form>
+    <span id="status">Initializing...</span>
+  </header>
+
+  <iframe id="proxy-frame"></iframe>
+
+  <script>
+    const WISP_URL = "wss://anura.pro/wisp/";
+    const ENGINE_CDN = "https://cdn.jsdelivr.net/gh/hahahah67-pixel/scramjet-static@main/scramjet-engine";
+    const TRANSPORT_CDN = "https://cdn.jsdelivr.net/npm/@mercuryworkshop/libcurl-transport@1.5.0/dist/index.mjs";
+
+    const statusEl = document.getElementById("status");
+    const frame = document.getElementById("proxy-frame");
+    const input = document.getElementById("url-input");
+    let scramjet;
+
+    async function setupProxy() {
+      try {
+        const { ScramjetController } = $scramjetLoadController();
+        scramjet = new ScramjetController({
+          prefix: "/scramjet/",
+          files: {
+            wasm: `${ENGINE_CDN}/scramjet.wasm`,
+            all: `${ENGINE_CDN}/scramjet-all.js`,
+            sync: `${ENGINE_CDN}/scramjet-sync.js`
+          }
+        });
+
+        await scramjet.init();
+
+        await navigator.serviceWorker.register("./sw.js", { scope: "./" });
+        await navigator.serviceWorker.ready;
+
+        const connection = new BareMux.BareMuxConnection("./bare-mux-worker.js");
+        await connection.setTransport(TRANSPORT_CDN, [{ wisp: WISP_URL }]);
+
+        statusEl.textContent = "Ready";
+      } catch (err) {
+        console.error("Proxy init error:", err);
+        statusEl.textContent = "Init Error (Check Console)";
+      }
+    }
+
+    function normalizeUrl(raw) {
+      const trimmed = raw.trim();
+      if (!trimmed) return null;
+      if (/^https?:\/\//i.test(trimmed)) return trimmed;
+      if (trimmed.includes(".") && !trimmed.includes(" ")) return "https://" + trimmed;
+      return "https://duckduckgo.com/?q=" + encodeURIComponent(trimmed);
+    }
+
+    document.getElementById("proxy-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const target = normalizeUrl(input.value);
+      if (!target || !scramjet) return;
+      statusEl.textContent = "Loading...";
+      frame.src = scramjet.encodeUrl(target);
+      statusEl.textContent = "Ready";
+    });
+
+    document.getElementById("back-btn").addEventListener("click", () => frame.contentWindow?.history.back());
+    document.getElementById("fwd-btn").addEventListener("click", () => frame.contentWindow?.history.forward());
+    document.getElementById("reload-btn").addEventListener("click", () => frame.contentWindow?.location.reload());
+
+    setupProxy();
+  </script>
+</body>
+</html>
